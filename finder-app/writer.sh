@@ -35,6 +35,16 @@ fi
 # Full path to a file
 writefile=$1
 
+# Ensure the directory for the file exists
+dir=$(dirname "$writefile")
+if [ ! -d "$dir" ]; then
+	mkdir -p "$dir" ||
+	{
+		echo "Error: Failed to create directory '$dir'."
+		exit 1
+	}
+fi
+
 # Text string to be written in the file
 writestr=$2
 
