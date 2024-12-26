@@ -60,4 +60,4 @@ for f in $(find "$filesdir" -type f); do
 	((count_words+=count_words_i))
 done
 
-echo "The number of files are $count_files and the number lines are $count_words"
+echo "The number of files are $count_files and the number of matching lines are $count_words"
