@@ -3,6 +3,7 @@
 # Function to display help message
 display_help()
 {
+	echo
 	echo "Usage: $0 <directory> <search_string>"
 	echo
 	echo "Searches for a text string in the files of the specified directory."
@@ -13,6 +14,7 @@ display_help()
 	echo
 	echo "Options:"
 	echo "  -h, --help      Display this help message."
+	echo
 	exit 0
 }
 
@@ -58,7 +60,4 @@ for f in $(find "$filesdir" -type f); do
 	((count_words+=count_words_i))
 done
 
-echo "The number of files are $count_files and the number \
-of matching lines are $count_words"
-
-
+echo "The number of files are $count_files and the number lines are $count_words"
