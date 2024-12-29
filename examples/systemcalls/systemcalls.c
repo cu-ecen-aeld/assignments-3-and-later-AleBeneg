@@ -1,3 +1,7 @@
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <fcntl.h>
 #include "systemcalls.h"
 
 /**
@@ -7,17 +11,28 @@
  *   either in invocation of the system() call, or if a non-zero return
  *   value was returned by the command issued in @param cmd.
 */
-bool do_system(const char *cmd)
+bool do_system (const char *cmd)
 {
+	int err;
 
-/*
- * TODO  add your code here
- *  Call the system() function with the command set in the cmd
- *   and return a boolean true if the system() call completed with success
- *   or false() if it returned a failure
-*/
+	if (cmd == NULL)
+	{
+		fprintf (stderr, "Error: no command provided\n");
+		return false;
+	}
 
-    return true;
+	if ((err = system (cmd)) != 0)
+	{
+		if (err == -1)
+			perror ("system");
+		else if (err == 127)
+			fprintf (stderr, "Error: Shell execution failed\n");
+		else
+			fprintf (stderr, "Error: Command failed with status %d\n", err);
+		return false;
+	}
+
+	return true;
 }
 
 /**
@@ -33,35 +48,58 @@ bool do_system(const char *cmd)
 *   fork, waitpid, or execv() command, or if a non-zero return value was returned
 *   by the command issued in @param arguments with the specified arguments.
 */
-
-bool do_exec(int count, ...)
+bool do_exec (int count, ...)
 {
-    va_list args;
-    va_start(args, count);
-    char * command[count+1];
-    int i;
-    for(i=0; i<count; i++)
-    {
-        command[i] = va_arg(args, char *);
-    }
-    command[count] = NULL;
-    // this line is to avoid a compile warning before your implementation is complete
-    // and may be removed
-    command[count] = command[count];
+	va_list args;
+	char    *command[count+1];
+	int     i, pid, ret;
 
-/*
- * TODO:
- *   Execute a system command by calling fork, execv(),
- *   and wait instead of system (see LSP page 161).
- *   Use the command[0] as the full path to the command to execute
- *   (first argument to execv), and use the remaining arguments
- *   as second argument to the execv() command.
- *
-*/
+	va_start (args, count);
 
-    va_end(args);
+	for (i = 0; i < count; i++)
+	{
+		command[i] = va_arg (args, char *);
+	}
+	command[count] = NULL;
 
-    return true;
+	ret = true;
+
+	/* Create a new process */
+	switch (pid = fork ())
+	{
+		case -1:
+			perror ("fork");
+			ret = false;
+			break;
+
+		/* Child process */
+		case 0:
+			if (execv (command[0], command) == -1)
+			{
+				perror ("execv");
+				exit (1);
+			}
+			exit (0);
+
+		/* Parent process */
+		default:
+		{
+			int status;
+
+			if (waitpid (pid, &status, 0) == -1)
+			{
+				perror ("waitpid");
+				ret = false;
+			}
+
+			/* Check if the child process completed successfully */
+			ret = (status == 0);
+			break;
+		}
+	}
+
+	va_end (args);
+	return ret;
 }
 
 /**
@@ -69,31 +107,68 @@ bool do_exec(int count, ...)
 *   This file will be closed at completion of the function call.
 * All other parameters, see do_exec above
 */
-bool do_exec_redirect(const char *outputfile, int count, ...)
+bool do_exec_redirect (const char *outputfile, int count, ...)
 {
-    va_list args;
-    va_start(args, count);
-    char * command[count+1];
-    int i;
-    for(i=0; i<count; i++)
-    {
-        command[i] = va_arg(args, char *);
-    }
-    command[count] = NULL;
-    // this line is to avoid a compile warning before your implementation is complete
-    // and may be removed
-    command[count] = command[count];
+	va_list args;
+	char    *command[count+1];
+	int     i, fd, ret, pid;
 
+	va_start (args, count);
+	for(i = 0; i < count; i++)
+	{
+		command[i] = va_arg (args, char *);
+	}
+	command[count] = NULL;
 
-/*
- * TODO
- *   Call execv, but first using https://stackoverflow.com/a/13784315/1446624 as a refernce,
- *   redirect standard out to a file specified by outputfile.
- *   The rest of the behaviour is same as do_exec()
- *
-*/
+	ret = true;
+	if ((fd = open (outputfile, O_WRONLY|O_TRUNC|O_CREAT,
+	                S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH)) < 0)
+	{
+		perror ("open");
+		ret = false;
+	}
+	else
+	{
+		switch (pid = fork ())
+		{
+			case -1:
+				perror ("fork");
+				ret = false;
+				break;
 
-    va_end(args);
+			/* Child process */
+			case 0:
+				/* Redirect stdout to the file */
+				if (dup2 (fd, STDOUT_FILENO) < 0)
+				{
+					perror ("dup2");
+					exit (1);
+				}
+				close (fd);
+				if (execv (command[0], command) == -1)
+				{
+					perror ("execv");
+					exit (2);
+				}
+				exit (0);
 
-    return true;
+			/* Parent process */
+			default:
+			{
+				int status;
+
+				if (waitpid (pid, &status, 0) == -1)
+				{
+					perror ("waitpid");
+					ret = false;
+				}
+				ret = (status == 0);
+				break;
+			}
+		}
+	}
+
+	close (fd);
+	va_end (args);
+	return ret;
 }
